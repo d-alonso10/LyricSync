@@ -4,8 +4,6 @@ A dynamic Python console app that fetches audio from YouTube and displays perfec
 
 Turn your console into a real-time lyric-syncing machine. VocaSync automatically searches for any song, downloads the best-matched audio from YouTube, and finds its corresponding timed `.lrc` lyrics. It then intelligently validates both sources by comparing their duration to ensure a perfect sync.
 
-![Demo Screenshot](https://i.imgur.com/example.png) 
-*(Te sugiero que tomes una captura de pantalla de tu script funcionando y la reemplaces aquí)*
 
 ---
 
