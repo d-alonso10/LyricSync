@@ -1,0 +1,16 @@
+# Archivos temporales generados por la app
+cancion_descargada.mp3
+cancion_descargada.lrc
+
+# Entorno virtual de Python (¡Muy importante!)
+# Nunca subas tu entorno virtual
+venv/
+*.env
+
+# Archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Archivos comunes del sistema operativo
+.DS_Store
+Thumbs.db
