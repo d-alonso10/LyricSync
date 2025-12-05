@@ -18,16 +18,10 @@ const WindowControls: React.FC = () => {
   };
 
   return (
-    // SINGLE CONTAINER STRATEGY
-    // The container itself is draggable.
-    // It covers the top 40px (h-10).
-    // z-50 ensures it's on top of everything.
     <div className="absolute top-0 left-0 w-full h-10 z-50 flex items-center px-4 app-draggable">
 
-      {/* Buttons Container - MUST be no-drag to be clickable */}
       <div className="flex gap-2 p-2 rounded-lg transition-colors cursor-default no-drag hover:bg-black/10">
 
-        {/* Close Button (Red) */}
         <div
           onClick={handleClose}
           className="w-3 h-3 rounded-full bg-[#FF5F57] border border-[#E0443E] shadow-sm flex items-center justify-center overflow-hidden group/btn cursor-pointer"
@@ -38,7 +32,6 @@ const WindowControls: React.FC = () => {
           </svg>
         </div>
 
-        {/* Minimize Button (Yellow) */}
         <div
           onClick={handleMinimize}
           className="w-3 h-3 rounded-full bg-[#FEBC2E] border border-[#D89E24] shadow-sm flex items-center justify-center overflow-hidden group/btn cursor-pointer"

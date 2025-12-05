@@ -11,7 +11,7 @@ const LyricsView: React.FC<LyricsViewProps> = ({ song, currentTime, onSeek }) =>
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState<number>(0);
 
-  // Find the active lyric based on time
+
   useEffect(() => {
     let newIndex = 0;
     for (let i = 0; i < song.lyrics.length; i++) {
@@ -24,7 +24,7 @@ const LyricsView: React.FC<LyricsViewProps> = ({ song, currentTime, onSeek }) =>
     setActiveIndex(newIndex);
   }, [currentTime, song.lyrics]);
 
-  // Smooth scroll to active lyric
+
   useEffect(() => {
     if (containerRef.current) {
       const activeElement = containerRef.current.children[activeIndex] as HTMLElement;
@@ -39,7 +39,6 @@ const LyricsView: React.FC<LyricsViewProps> = ({ song, currentTime, onSeek }) =>
 
   return (
     <div className="flex-1 w-full h-full relative overflow-hidden flex flex-col">
-      {/* Heavy Mask for fading out top/bottom to focus center */}
       <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/30 to-transparent z-10 pointer-events-none" />
 
       <div
@@ -62,7 +61,6 @@ const LyricsView: React.FC<LyricsViewProps> = ({ song, currentTime, onSeek }) =>
                 }
               `}
               style={{
-                // Heavy blur for non-active lines to simulate depth of field
                 filter: isActive ? 'blur(0px)' : 'blur(1.5px)',
                 transform: isActive ? 'scale(1)' : 'scale(0.98)',
               }}

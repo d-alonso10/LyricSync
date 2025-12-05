@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import concurrent.futures
 
 app = Flask(__name__)
 CORS(app)
@@ -58,84 +59,158 @@ def search_song():
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
-    print(f"Searching for: {query}")
-    
     try:
-        # 1. Search YouTube
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'default_search': 'ytsearch1',
-            'quiet': True,
-            'noplaylist': True,
-        }
+        # Define helper functions for parallel execution
+        def fetch_youtube_candidates(q):
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'default_search': 'ytsearch10', # Increased from 5 to 10 for better variety
+                'quiet': True,
+                'noplaylist': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(q, download=False)
+                if 'entries' in result:
+                    return result['entries']
+            return []
+
+        def fetch_lyrics_candidates(q):
+            session = requests.Session()
+            retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+            session.mount('https://', HTTPAdapter(max_retries=retries))
+            try:
+                # Get more results to increase matching chances
+                resp = session.get(f"https://lrclib.net/api/search?q={q}", timeout=5)
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                print(f"Lyrics search error: {e}")
+                return []
+
+        # Execute searches in parallel
+        video_candidates = []
+        lyrics_candidates = []
         
-        video_info = None
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(query, download=False)
-            if 'entries' in result and len(result['entries']) > 0:
-                video_info = result['entries'][0]
-        
-        if not video_info:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_yt = executor.submit(fetch_youtube_candidates, query)
+            future_lyrics = executor.submit(fetch_lyrics_candidates, query)
+            
+            video_candidates = future_yt.result()
+            lyrics_candidates = future_lyrics.result()
+
+        if not video_candidates:
             return jsonify({"error": "Video not found"}), 404
-            
-        video_duration = video_info.get('duration')
-        video_title = video_info.get('title')
-        video_url = video_info.get('url')
-        video_id = video_info.get('id')
-        
-        print(f"Found Video: {video_title} ({video_duration}s)")
 
-        # 2. Search Lyrics
-        lrc_content = None
+        # SMART MATCHING ALGORITHM V2
+        selected_video = None
+        selected_lyrics = None
         
-        session = requests.Session()
-        retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        session.mount('https://', HTTPAdapter(max_retries=retries))
+        # Filter usable lyrics
+        valid_lyrics = [
+            l for l in lyrics_candidates 
+            if l.get('syncedLyrics') and l.get('duration')
+        ]
+
+        if not valid_lyrics:
+             return jsonify({"error": "No synced lyrics found for this song"}), 404
+
+        # Helper: Clean title for check
+        def title_score(video_title):
+            t = video_title.lower()
+            if "audio" in t: return 2
+            if "lyric" in t: return 1
+            return 0
+
+        # Pass 1: Strict Match (< 2s) - The Gold Standard
+        # We prioritize videos that say "Audio" in title if matches are close
+        best_diff = float('inf')
         
-        try:
-            resp = session.get(f"https://lrclib.net/api/search?q={query}", timeout=10)
-            resp.raise_for_status()
-            results = resp.json()
+        for video in video_candidates:
+            v_dur = video.get('duration')
+            if not v_dur: continue
             
-            for item in results:
-                if not item.get('syncedLyrics') or not item.get('duration'):
-                    continue
+            for lyric in valid_lyrics:
+                diff = abs(v_dur - lyric['duration'])
                 
-                if abs(item['duration'] - video_duration) <= TOLERANCIA_SEGUNDOS:
-                    lrc_content = item['syncedLyrics']
-                    print("Found synced lyrics!")
-                    break
-        except Exception as e:
-            print(f"Lyrics search error: {e}")
-            
-        if not lrc_content:
-            return jsonify({"error": "Lyrics not found for this song version"}), 404
+                if diff < 2.0:
+                    # Found a great match. 
+                    # If we already have a selected video, prefer the one with "Audio" in title
+                    if selected_video and title_score(video['title']) > title_score(selected_video['title']):
+                         selected_video = video
+                         selected_lyrics = lyric['syncedLyrics']
+                         best_diff = diff
+                    elif not selected_video or diff < best_diff:
+                         selected_video = video
+                         selected_lyrics = lyric['syncedLyrics']
+                         best_diff = diff
+        
+        # Pass 2: Relaxed Match (< 5s) - If Pass 1 failed
+        if not selected_video:
+            for video in video_candidates:
+                v_dur = video.get('duration')
+                if not v_dur: continue
+                
+                for lyric in valid_lyrics:
+                    diff = abs(v_dur - lyric['duration'])
+                    if diff < 5.0 and diff < best_diff:
+                         selected_video = video
+                         selected_lyrics = lyric['syncedLyrics']
+                         best_diff = diff
 
-        # 3. Download MP3
+        # Pass 3: Desperate Match (< 10s) - Only if Video explicitly says "Audio" or "Lyric"
+        # Often official videos are way longer, but "Audio" versions might be just slightly off due to silence
+        if not selected_video:
+             for video in video_candidates:
+                if title_score(video['title']) == 0: continue # Skip cinematic videos in this desperate pass
+                
+                v_dur = video.get('duration')
+                if not v_dur: continue
+                
+                for lyric in valid_lyrics:
+                    diff = abs(v_dur - lyric['duration'])
+                    if diff < 10.0 and diff < best_diff:
+                         selected_video = video
+                         selected_lyrics = lyric['syncedLyrics']
+                         best_diff = diff
+        
+        if not selected_video or not selected_lyrics:
+            return jsonify({
+                "error": f"Could not find a synchronized match. Best diff: {best_diff if best_diff != float('inf') else 'N/A'}s"
+            }), 404
+
+        # Set variables for download
+        video_title = selected_video.get('title')
+        video_duration = selected_video.get('duration')
+        video_url = selected_video.get('url')
+        video_id = selected_video.get('id')
+        lrc_content = selected_lyrics
+        video_info = selected_video
+
+
+        # Download MP3 (Optimized)
         filename = f"{video_id}.mp3"
         filepath = os.path.join(DOWNLOAD_FOLDER, filename)
         
         if not os.path.exists(filepath):
-            print("Downloading MP3...")
             ydl_download = {
                 'format': 'bestaudio/best',
                 'outtmpl': os.path.join(DOWNLOAD_FOLDER, video_id),
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
-                    'preferredquality': '192',
+                    'preferredquality': '128', # Reduced from 192 for speed
                 }],
-                'quiet': True
+                'quiet': True,
+                'no_warnings': True
             }
             with yt_dlp.YoutubeDL(ydl_download) as ydl:
                 ydl.download([video_url])
         
-        # 4. Parse Lyrics
         parsed_lyrics = parse_lrc(lrc_content)
         
         return jsonify({
             "title": video_title,
-            "artist": "Unknown", # YouTube doesn't always give clean artist
+            "artist": "Unknown", 
             "duration": video_duration,
             "lyrics": parsed_lyrics,
             "audio_url": f"http://localhost:5001/stream/{filename}",

@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className="h-screen w-screen text-white flex flex-col relative overflow-hidden transition-colors duration-1000 select-none"
+      className="h-screen w-screen text-white flex flex-col relative overflow-hidden transition-colors duration-1000 select-none app-draggable"
       style={{
         background: song
           ? `linear-gradient(160deg, ${song.colorStart} 0%, ${song.colorEnd} 100%)`
@@ -102,18 +102,23 @@ const App: React.FC = () => {
     >
       <WindowControls />
 
-      {/* Background Effects */}
       <div className="absolute inset-0 opacity-20 pointer-events-none"
         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
       />
       <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-gradient-to-br from-white/10 to-transparent rounded-full blur-3xl opacity-30 animate-pulse pointer-events-none" />
 
-      {/* SEARCH OVERLAY */}
       {showSearch && (
-        <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 no-drag">
+        <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 app-draggable">
           <h1 className="text-2xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">
             VocaSync
           </h1>
+
+          <button
+            onClick={() => setShowSearch(false)}
+            className="absolute top-6 right-6 text-white/50 hover:text-white no-drag"
+          >
+            ✕
+          </button>
 
           <form onSubmit={handleSearch} className="w-full">
             <input
@@ -121,7 +126,7 @@ const App: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search song..."
-              className="w-full bg-white/10 border border-white/20 rounded-full px-4 py-3 text-sm text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+              className="w-full bg-white/10 border border-white/20 rounded-full px-4 py-3 text-sm text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all no-drag"
               autoFocus
             />
           </form>
@@ -131,7 +136,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col relative z-10 overflow-hidden" onClick={togglePlay}>
         {song ? (
           <LyricsView
@@ -150,13 +154,16 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Search Toggle (Bottom Right) */}
       {!showSearch && (
         <button
           onClick={(e) => { e.stopPropagation(); setShowSearch(true); }}
-          className="absolute bottom-4 right-4 z-50 p-2 bg-black/40 rounded-full hover:bg-black/60 transition-colors no-drag"
+          className="absolute bottom-4 right-4 z-50 p-2 bg-black/40 rounded-full hover:bg-black/60 transition-colors no-drag flex items-center gap-2"
         >
-          <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          {isLoading ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-green-400 rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          )}
         </button>
       )}
     </div>
