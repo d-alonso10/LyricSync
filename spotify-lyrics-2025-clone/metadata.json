@@ -1,0 +1,5 @@
+{
+  "name": "Spotify Lyrics 2025 Clone",
+  "description": "A high-fidelity web recreation of the modern Spotify Lyrics interface. Features synchronized scrolling lyrics, dynamic background colors, smooth transitions, and a playback simulation engine.",
+  "requestFramePermissions": []
+}

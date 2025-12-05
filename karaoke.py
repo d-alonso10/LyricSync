@@ -1,261 +1,195 @@
 import os
-# ¡NUEVO! Esto debe ir ANTES de importar pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
-
 import pygame
 import re
-import time
-import colorama
-from colorama import Fore, Style
-import requests  # Para descargar LRC
-import yt_dlp      # Para descargar MP3
+import requests
+import yt_dlp
 import sys
+import tkinter as tk
+from tkinter import font as tkFont
+import textwrap
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# --- Configuración de Pantalla ---
-LINEAS_ANTES = 2
-LINEAS_DESPUES = 4
+try:
+    from PIL import Image, ImageTk, ImageDraw, ImageFilter
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
-# --- Nombres de archivo temporales ---
 TEMP_MP3 = "cancion_descargada.mp3"
 TEMP_LRC = "cancion_descargada.lrc"
+TOLERANCIA = 5.0
+W_ANCHO = 350
+W_ALTO = 350
+C_START = "#4a148c"
+C_END = "#1a237e"
+FONT_FAM = "Segoe UI"
+F_SIZE_ACT = 22
+F_SIZE_INA = 16
 
-# --- Configuración de Validación ---
-TOLERANCIA_SEGUNDOS = 5.0 
-
-# ###################################################################
-# FUNCIONES DE DESCARGA (LÓGICA INVERTIDA + TERMINAL LIMPIA)
-# ###################################################################
-
-def descargar_cancion_y_letra(busqueda):
-    """
-    Intenta descargar el MP3 y LRC.
-    LÓGICA: YouTube es la fuente de referencia.
-    1. Busca el video en YouTube y obtiene su duración.
-    2. Busca en LRC Lib una letra que coincida con esa duración.
-    """
+def descargar_contenido(busqueda):
     print(f"\nBuscando '{busqueda}'...")
-    lrc_listo = False
-    mp3_listo = False
-    
-    video_ref_url = None
-    video_ref_duration = None
-    video_ref_title = None
-    
-    lrc_data_final = None
-
+    vid_url, vid_dur, vid_title = None, None, None
+    lrc_final = None
     try:
-        # --- 1. Buscar en YouTube PRIMERO ---
-        print("Buscando video de referencia en YouTube...")
+        ydl_opts = {'format':'bestaudio/best','default_search':'ytsearch5','quiet':True,'no_warnings':True,'noplaylist':True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            res = ydl.extract_info(busqueda, download=False)
+            vids = res.get('entries', [])
+            if not vids: return False, False
+        for v in vids:
+            if v and v.get('duration'):
+                vid_url, vid_dur, vid_title = v.get('url'), v.get('duration'), v.get('title')
+                break
+        if not vid_dur: return False, False
+        print(f"Ref: '{vid_title}' ({vid_dur:.2f}s)")
         
-        # Opciones para SÓLO BUSCAR (eliminamos 'extract_flat')
-        ydl_search_opts = {
-            'format': 'bestaudio/best',
-            'default_search': 'ytsearch5', # Buscar los 5 primeros
-            'quiet': True,
-            'no_warnings': True, # ¡NUEVO! Oculta warnings de búsqueda
-            'noplaylist': True,
-        }
+        s = requests.Session()
+        ret = Retry(total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+        s.mount("https://", HTTPAdapter(max_retries=ret))
+        res = s.get(f"https://lrclib.net/api/search?q={busqueda}", timeout=30)
+        res.raise_for_status()
+        for l in res.json():
+            if not l.get('duration') or not l.get('syncedLyrics'): continue
+            if abs(l['duration'] - vid_dur) <= TOLERANCIA:
+                lrc_final = l['syncedLyrics']
+                break
+        if not lrc_final: return False, False
 
-        with yt_dlp.YoutubeDL(ydl_search_opts) as ydl:
-            search_result = ydl.extract_info(busqueda, download=False)
-            videos = search_result.get('entries', [])
-
-            if not videos:
-                print("❌ Error: No se encontró ningún video en YouTube.")
-                return False, False
-        
-        # --- 2. Encontrar un video de referencia VÁLIDO ---
-        # Usaremos el primer video que tenga duración
-        for video in videos:
-            if video and video.get('duration'):
-                video_ref_url = video.get('url')
-                video_ref_duration = video.get('duration')
-                video_ref_title = video.get('title', 'Video sin título')
-                break # Encontramos nuestro video de referencia
-        
-        if not video_ref_duration:
-            print("❌ Error: YouTube no devolvió videos con datos de duración.")
-            return False, False
-            
-        print(f"ℹ️ Video de referencia: '{video_ref_title}'")
-        print(f"ℹ️ Duración de referencia: {video_ref_duration:.2f} segundos.")
-
-        # --- 3. Buscar en LRC Lib una letra que COINCIDA ---
-        print("Buscando en lrclib.net una letra con duración similar...")
-        response = requests.get(f"https://lrclib.net/api/search?q={busqueda}", timeout=10)
-        response.raise_for_status()
-        lrc_results = response.json()
-        
-        if not lrc_results:
-            print("❌ Error: No se encontraron letras en lrclib.net.")
-            return False, False
-
-        # --- Comprobación simplificada (sin 'print' sucios) ---
-        for lrc_entry in lrc_results:
-            lrc_duration = lrc_entry.get('duration')
-
-            if not lrc_duration or not lrc_entry.get('syncedLyrics'):
-                continue
-
-            diferencia = abs(lrc_duration - video_ref_duration)
-            
-            if diferencia <= TOLERANCIA_SEGUNDOS:
-                lrc_data_final = lrc_entry['syncedLyrics']
-                print(f"  ✅ ¡Letra sincronizada encontrada!\n") # Mensaje limpio
-                break 
-        # --- Fin de la comprobación simplificada ---
-
-        # --- 4. Validar y Descargar ---
-        
-        if not lrc_data_final:
-            print("❌ Error: Se encontró un video, pero ninguna letra coincidió con su duración.")
-            return False, False
-
-        # Si llegamos aquí, tenemos AMBAS cosas. Procedemos a descargar.
-        
-        # Descargar MP3
-        # ¡NUEVO! Imprime el TÍTULO, no la URL
-        print(f"Descargando MP3 de: '{video_ref_title}' (puede tardar)...")
-        
-        ydl_download_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'outtmpl': 'cancion_descargada',
-            # 'quiet': True, <-- Se quita para ver la barra de progreso
-            'no_warnings': True, # ¡NUEVO! Oculta warnings de descarga
-            'noplaylist': True,
-        }
-
-        if os.path.exists(TEMP_MP3):
-            os.remove(TEMP_MP3)
-            
-        with yt_dlp.YoutubeDL(ydl_download_opts) as ydl:
-            ydl.download([video_ref_url]) 
-
-        if not os.path.exists(TEMP_MP3):
-             raise Exception("yt-dlp no generó el archivo MP3.")
-
-        print(f"\n✅ MP3 guardado como {TEMP_MP3}")
-        mp3_listo = True
-        
-        # Guardar LRC
-        print(f"✅ LRC guardado como {TEMP_LRC}")
-        with open(TEMP_LRC, 'w', encoding='utf-8') as f:
-            f.write(lrc_data_final)
-        lrc_listo = True
-
+        if os.path.exists(TEMP_MP3): os.remove(TEMP_MP3)
+        dl_opts = {'format':'bestaudio/best','postprocessors':[{'key':'FFmpegExtractAudio','preferredcodec':'mp3','preferredquality':'192'}],'outtmpl':'cancion_descargada','no_warnings':True,'noplaylist':True}
+        with yt_dlp.YoutubeDL(dl_opts) as ydl: ydl.download([vid_url])
+        if not os.path.exists(TEMP_MP3): raise Exception("MP3 no generado")
+        with open(TEMP_LRC, 'w', encoding='utf-8') as f: f.write(lrc_final)
+        return True, True
     except Exception as e:
-        print(f"❌ Error inesperado durante la descarga: {e}")
-        
-    return mp3_listo, lrc_listo
+        print(f"Error: {e}")
+        return False, False
 
-# ###################################################################
-# FUNCIONES DEL KARAOKE (SIN CAMBIOS)
-# ###################################################################
-
-def parse_lrc(filepath):
-    lyrics = []
-    lrc_regex = re.compile(r'\[(\d{2}):(\d{2})\.?(\d{2,3})?\](.*)')
+def parse_lrc(fp):
+    lyr = []
+    reg = re.compile(r'\[(\d{2}):(\d{2})\.?(\d{2,3})?\](.*)')
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                match = lrc_regex.match(line)
-                if not match: continue
-                minutos, segundos = int(match.group(1)), int(match.group(2))
-                frac_seg = 0
-                if match.group(3):
-                    frac_seg = int(match.group(3))
-                    if len(match.group(3)) == 2: frac_seg *= 10
-                texto = match.group(4).strip()
-                tiempo_ms = (minutos * 60 * 1000) + (segundos * 1000) + frac_seg
-                lyrics.append((tiempo_ms, texto))
-    except FileNotFoundError:
-        print(f"Error: No se encontró el archivo de letra {filepath}")
-        return None
-    lyrics.sort()
-    return lyrics
+        with open(fp, 'r', encoding='utf-8') as f:
+            for l in f:
+                m = reg.match(l)
+                if not m: continue
+                mn, sg = int(m.group(1)), int(m.group(2))
+                fr = int(m.group(3)) if m.group(3) else 0
+                if m.group(3) and len(m.group(3)) == 2: fr *= 10
+                tx = m.group(4).strip()
+                if tx: lyr.append(((mn*60000)+(sg*1000)+fr, tx))
+    except: return None
+    lyr.sort()
+    return lyr
 
-def play_karaoke(mp3_file, lrc_file):
-    colorama.init(autoreset=True)
-    letras_con_tiempo = parse_lrc(lrc_file)
-    if not letras_con_tiempo:
-        print("No se pudieron cargar las letras.")
-        return
+def gen_bg(w, h):
+    if not PIL_AVAILABLE: return None
+    base = Image.new('RGB', (w, h), C_START)
+    cs, ce = tuple(int(C_START.lstrip('#')[i:i+2], 16) for i in (0,2,4)), tuple(int(C_END.lstrip('#')[i:i+2], 16) for i in (0,2,4))
+    draw = ImageDraw.Draw(base)
+    for y in range(h):
+        r = int(cs[0] + (ce[0] - cs[0]) * (y/h))
+        g = int(cs[1] + (ce[1] - cs[1]) * (y/h))
+        b = int(cs[2] + (ce[2] - cs[2]) * (y/h))
+        draw.line([(0, y), (w, y)], fill=(r,g,b))
+    glow = Image.new('RGBA', (w, h), (0,0,0,0))
+    ImageDraw.Draw(glow).ellipse((-w//2, -h//2, w, h), fill=(255,255,255,40))
+    base.paste(glow.filter(ImageFilter.GaussianBlur(50)), (0,0), glow)
+    noise = Image.effect_noise((w, h), 15).convert('L')
+    n_rgba = Image.new('RGBA', (w, h))
+    n_rgba.putdata([(0,0,0,int(p*0.05)) for p in noise.getdata()])
+    base.paste(n_rgba, (0,0), n_rgba)
+    return base
 
-    if not os.path.exists(mp3_file):
-        print(f"Error: No se encontró el archivo de audio {mp3_file}")
-        return
-        
+def blend_col(hex_bg, op):
+    bg = tuple(int(hex_bg.lstrip('#')[i:i+2], 16) for i in (0,2,4))
+    return f"#{int(255*op + bg[0]*(1-op)):02x}{int(255*op + bg[1]*(1-op)):02x}{int(255*op + bg[2]*(1-op)):02x}"
+
+def run_gui(mp3, lrc):
+    data = parse_lrc(lrc)
+    if not data: return
     try:
         pygame.mixer.init()
-        pygame.mixer.music.load(mp3_file)
-    except pygame.error as e:
-        print(f"\n❌ Error de Pygame al cargar el MP3: {e}")
-        print("El archivo de audio puede estar corrupto o en un formato no compatible.")
-        return
-    
-    print(f"\n🎤 Preparando Karaoke... Presiona Enter para comenzar")
-    try:
-        input() 
-    except EOFError:
-        pass 
+        pygame.mixer.music.load(mp3)
+    except: return
 
+    root = tk.Tk()
+    root.title("Spotify2025")
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{W_ANCHO}x{W_ALTO}+{(sw-W_ANCHO)//2}+{(sh-W_ALTO)//2}")
+    root.overrideredirect(True)
+    root.wm_attributes("-topmost", 1)
+
+    bg_tk = None
+    if PIL_AVAILABLE:
+        bg_tk = ImageTk.PhotoImage(gen_bg(W_ANCHO, W_ALTO))
+    
+    cv = tk.Canvas(root, highlightthickness=0, bg="#321b85")
+    cv.pack(fill="both", expand=True)
+    if bg_tk: cv.create_image(0, 0, image=bg_tk, anchor="nw")
+
+    def move(e): root.geometry(f"+{root.winfo_x()+(e.x-root.x)}+{root.winfo_y()+(e.y-root.y)}")
+    cv.bind("<Button-1>", lambda e: setattr(root, 'x', e.x) or setattr(root, 'y', e.y))
+    cv.bind("<B1-Motion>", move)
+
+    f_act = tkFont.Font(family=FONT_FAM, size=F_SIZE_ACT, weight="bold")
+    f_ina = tkFont.Font(family=FONT_FAM, size=F_SIZE_INA, weight="bold")
+    c_act, c_ina = "#FFFFFF", blend_col("#321b85", 0.4)
+    
+    # Pre-cálculo de layout para optimización masiva
+    w_act = textwrap.TextWrapper(width=int((W_ANCHO-40)/f_act.measure("a")))
+    w_ina = textwrap.TextWrapper(width=int((W_ANCHO-40)/f_ina.measure("a")))
+    
+    cache = []
+    for _, tx in data:
+        t_a = w_act.fill(tx) if tx else ""
+        t_i = w_ina.fill(tx) if tx else ""
+        h_a = (f_act.metrics('linespace') * len(t_a.split('\n'))) + 30
+        h_i = (f_ina.metrics('linespace') * len(t_i.split('\n'))) + 15
+        cache.append({'ta':t_a, 'ti':t_i, 'ha':h_a, 'hi':h_i})
+
+    idx, pan, cy = 0, W_ALTO/2, W_ALTO/2
+    
+    def loop():
+        nonlocal idx, pan
+        pos = pygame.mixer.music.get_pos()
+        if pos == -1 and not pygame.mixer.music.get_busy():
+            root.destroy()
+            return
+        
+        while idx < len(data) and pos >= data[idx][0]: idx += 1
+        cur = idx - 1
+        
+        cv.delete("l")
+        y, tgt = 0, 0 if cur < 0 else 0
+        
+        for i, item in enumerate(cache):
+            act = (i == cur)
+            h = item['ha'] if act else item['hi']
+            if act: tgt = cy - (y + h/2)
+            
+            # Solo dibujar si será visible (aprox)
+            fy = y + pan
+            if -50 < fy + h and fy < W_ALTO + 50:
+                cv.create_text(W_ANCHO/2, fy + h/2, text=item['ta'] if act else item['ti'], 
+                             fill=c_act if act else c_ina, font=f_act if act else f_ina, 
+                             anchor="center", justify="center", width=W_ANCHO-30, tags="l")
+            y += h
+            
+        pan += (tgt - pan) * 0.15
+        root.after(33, loop)
+
+    cv.create_text(W_ANCHO-20, 20, text="✕", fill=c_ina, font=(FONT_FAM, 10), tags="x")
+    cv.tag_bind("x", "<Button-1>", lambda e: root.destroy() or pygame.mixer.music.stop())
+    
     pygame.mixer.music.play()
-    indice_letra_actual = 0
-    indice_letra_mostrada = -1
-    
-    try:
-        while pygame.mixer.music.get_busy() or indice_letra_actual < len(letras_con_tiempo):
-            tiempo_actual_ms = pygame.mixer.music.get_pos()
-            if tiempo_actual_ms == -1: break
-                
-            if indice_letra_actual < len(letras_con_tiempo):
-                (tiempo_siguiente_letra, _) = letras_con_tiempo[indice_letra_actual]
-                
-                if tiempo_actual_ms >= tiempo_siguiente_letra:
-                    if indice_letra_mostrada != indice_letra_actual:
-                        os.system('cls' if os.name == 'nt' else 'clear') 
-                        start_index = max(0, indice_letra_actual - LINEAS_ANTES)
-                        end_index = min(len(letras_con_tiempo), indice_letra_actual + LINEAS_DESPUES + 1)
-                        print("\n\n")
-                        for i in range(start_index, end_index):
-                            (_, texto_linea) = letras_con_tiempo[i]
-                            if i == indice_letra_actual:
-                                print(f"  {Style.BRIGHT}{Fore.WHITE}▶ {texto_linea}{Style.RESET_ALL}")
-                            elif i > indice_letra_actual:
-                                print(f"  {Style.DIM}{Fore.WHITE}  {texto_linea}{Style.RESET_ALL}")
-                            else:
-                                print(f"  {Style.DIM}{Fore.LIGHTBLACK_EX}  {texto_linea}{Style.RESET_ALL}")
-                        print("\n\n")
-                        indice_letra_mostrada = indice_letra_actual
-                    indice_letra_actual += 1
-            time.sleep(0.05) 
-    except KeyboardInterrupt:
-        print("\n¡Karaoke detenido!")
-    finally:
-        pygame.mixer.music.stop()
-        print("Fin de la canción.")
-
-# ###################################################################
-# BLOQUE PRINCIPAL (SIN CAMBIOS)
-# ###################################################################
+    loop()
+    root.mainloop()
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        termino_busqueda = " ".join(sys.argv[1:])
-    else:
-        termino_busqueda = input("¿Qué canción quieres cantar? (artista y nombre): ")
-    
-    if termino_busqueda:
-        mp3_ok, lrc_ok = descargar_cancion_y_letra(termino_busqueda)
-        
-        if mp3_ok and lrc_ok:
-            play_karaoke(TEMP_MP3, TEMP_LRC)
-        else:
-            print("\nNo se pudo iniciar el karaoke.")
-    else:
-        print("No se ingresó búsqueda.")
+    q = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else input("Canción: ")
+    if q:
+        m, l = descargar_contenido(q)
+        if m and l: run_gui(TEMP_MP3, TEMP_LRC)
