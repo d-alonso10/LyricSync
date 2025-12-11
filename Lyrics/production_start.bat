@@ -4,7 +4,7 @@ cd /d "%~dp0"
 :: 1. Start Python Backend (Hidden)
 :: Using pythonw to avoid console window
 cd backend
-start "" /B pythonw server.py
+start "" /B python server.py > nul 2>&1
 cd ..
 
 :: 2. Start Electron Frontend (Hidden Console)

@@ -75,6 +75,7 @@ def search_song():
                     if 'entries' in result:
                         return result['entries']
                 except Exception as e:
+                    pass
                     # print(f"Youtube Search Error: {e}")
             return []
 
