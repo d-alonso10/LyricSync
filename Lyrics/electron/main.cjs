@@ -30,6 +30,13 @@ function createWindow() {
 app.on('ready', createWindow);
 
 app.on('window-all-closed', function () {
+    const { net } = require('electron');
+    const request = net.request('http://localhost:5001/shutdown');
+    request.on('error', (err) => {
+        // Ignore errors if backend is already down
+    });
+    request.end();
+
     if (process.platform !== 'darwin') {
         app.quit();
     }

@@ -51,7 +51,12 @@ const LyricsView: React.FC<LyricsViewProps> = ({ song, currentTime, onSeek }) =>
           return (
             <div
               key={index}
-              onClick={() => onSeek(line.time)}
+              onClick={() => {
+                // Seek slightly before the line starts (0.6s) to act as a "lead-in" validation
+                // This prevents cutting off the first syllable and makes it feel more synced.
+                const seekTime = Math.max(0, line.time - 0.6);
+                onSeek(seekTime);
+              }}
               className={`
                 transition-all duration-700 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] 
                 cursor-pointer origin-left my-4 md:my-6
