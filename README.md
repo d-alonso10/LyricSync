@@ -85,6 +85,16 @@ Alternatively, you can run the components manually:
 
 ---
 
-## 📄 License
+## 📄 Licencia
 
-This project is licensed under the MIT License.
+Este proyecto está bajo la Licencia **Creative Commons Atribución-NoComercial 4.0 Internacional (CC BY-NC 4.0)**.
+
+Usted es libre de:
+* **Compartir** — copiar y redistribuir el material en cualquier medio o formato.
+* **Adaptar** — remezclar, transformar y crear a partir del material.
+
+Bajo las siguientes condiciones:
+* **Atribución** — Debe dar crédito al autor original.
+* **🚫 No Comercial** — No puede utilizar el material para fines comerciales (no puede venderlo).
+
+Para ver una copia completa de la licencia, visite el archivo [LICENSE](LICENSE).
