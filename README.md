@@ -1,8 +1,11 @@
-# VocaSync 🎵
+# LyricSync 🎵
 
-**VocaSync** is a modern, floating lyrics widget that brings your karaoke experience to life. It combines a beautiful **Electron/React** frontend with a powerful **Python** backend to fetch, sync, and display lyrics in real-time.
+**LyricSync** is a modern, floating lyrics widget that brings your karaoke experience to life. It combines a beautiful **Electron/React** frontend with a powerful **Python** backend to fetch, sync, and display lyrics in real-time.
 
-![VocaSync](Lyrics/app-icon.png)
+![LyricSync](Lyrics/app-icon.png)
+
+![Main Interface Placeholder](path/to/screenshot1.png)
+![Search View Placeholder](path/to/screenshot2.png)
 
 ---
 
@@ -31,8 +34,8 @@ Ensure you have the following installed on your system:
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/VocaSync.git
-    cd VocaSync
+    git clone https://github.com/your-username/LyricSync.git
+    cd LyricSync
     ```
 
 2.  **Install Backend Dependencies:**
@@ -55,7 +58,7 @@ Ensure you have the following installed on your system:
 For the best experience (no terminal windows), use the silent launcher:
 
 1.  Navigate to the `Lyrics` folder.
-2.  Double-click **`VocaSync_Silent.vbs`**.
+2.  Double-click **`LyricSync_Silent.vbs`**.
 
 *Tip: You can create a Desktop Shortcut to this file and give it the `app-icon.png` for a professional look.*
 

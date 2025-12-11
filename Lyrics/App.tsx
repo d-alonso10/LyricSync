@@ -110,7 +110,7 @@ const App: React.FC = () => {
       {showSearch && (
         <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 app-draggable">
           <h1 className="text-2xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500">
-            VocaSync
+            LyricSync
           </h1>
 
           <button
