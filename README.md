@@ -4,8 +4,9 @@
 
 ![LyricSync](Lyrics/app-icon.png)
 
-![Main Interface Placeholder](path/to/screenshot1.png)
-![Search View Placeholder](path/to/screenshot2.png)
+<img width="288" height="286" alt="image" src="https://github.com/user-attachments/assets/55d1015a-fc98-4edf-93ed-2f3d390803b7" />
+<img width="323" height="291" alt="image" src="https://github.com/user-attachments/assets/a3b2ed7b-0a72-43c0-a6b1-45910179cdfd" />
+
 
 ---
 
