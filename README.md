@@ -2,7 +2,8 @@
 
 **LyricSync** is a modern, floating lyrics widget that brings your karaoke experience to life. It combines a beautiful **Electron/React** frontend with a powerful **Python** backend to fetch, sync, and display lyrics in real-time.
 
-![LyricSync](Lyrics/app-icon.png)
+<img width="788" height="306" alt="image" src="https://github.com/user-attachments/assets/822b01fd-9526-408a-b15e-ede6db9d63fd" />
+
 
 <img width="288" height="286" alt="image" src="https://github.com/user-attachments/assets/55d1015a-fc98-4edf-93ed-2f3d390803b7" />
 <img width="323" height="291" alt="image" src="https://github.com/user-attachments/assets/a3b2ed7b-0a72-43c0-a6b1-45910179cdfd" />
